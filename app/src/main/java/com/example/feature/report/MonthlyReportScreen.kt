@@ -51,7 +51,7 @@ fun MonthlyReportScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val db = remember { com.example.core.database.AppDatabase.getDatabase(context, kotlinx.coroutines.GlobalScope) }
+    val db = remember { com.example.core.database.AppDatabase.getDatabase(context) }
     
     val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()

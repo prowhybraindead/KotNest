@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -47,7 +48,7 @@ fun SettingsScreen(
     val settingsState by viewModel.settings.collectAsState()
     
     val currentSettings = settingsState
-    val db = remember { AppDatabase.getDatabase(context, @Suppress("OPT_IN_USAGE") kotlinx.coroutines.GlobalScope) }
+    val db = remember { AppDatabase.getDatabase(context) }
     val colors = LocalKotNestColors.current
 
     var showImportSummaryDialog by remember { mutableStateOf(false) }
@@ -125,48 +126,33 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .border(1.dp, colors.border, RoundedCornerShape(24.dp))
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier.padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = colors.glassWhite,
+                        val landscapeLogoRes = if (colors.isLight) {
+                            R.drawable.ic_kotnest_landscape_black
+                        } else {
+                            R.drawable.ic_kotnest_landscape
+                        }
+                        Image(
+                            painter = painterResource(id = landscapeLogoRes),
+                            contentDescription = "KotNest Landscape Logo",
                             modifier = Modifier
-                                .size(56.dp)
-                                .border(1.5.dp, colors.border, CircleShape)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_kotnest_icon),
-                                    contentDescription = "KotNest Icon",
-                                    tint = if (colors.isLight) colors.deepAqua else colors.cyanAccent,
-                                    modifier = Modifier.size(38.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
-                            Text(
-                                text = "KotNest",
-                                fontWeight = FontWeight.Black,
-                                fontSize = 18.sp,
-                                color = colors.primaryText
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Version 1.0.0 (Premium Release)",
-                                fontSize = 11.sp,
-                                color = if (colors.isLight) colors.deepAqua else colors.cyanAccent,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Secure • Offline-First • Private",
-                                fontSize = 11.sp,
-                                color = colors.secondaryText
-                            )
-                        }
+                                .height(56.dp)
+                                .widthIn(max = 260.dp)
+                        )
+                        Text(
+                            text = "Version 1.0.0 (Premium Release)",
+                            fontSize = 11.sp,
+                            color = if (colors.isLight) colors.deepAqua else colors.cyanAccent,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Secure • Offline-First • Private",
+                            fontSize = 11.sp,
+                            color = colors.secondaryText
+                        )
                     }
                 }
 
@@ -628,7 +614,7 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                val providers = listOf("ExchangeRate-API Open Access", "Frankfurter API", "Custom Backend API (Placeholder)")
+                                val providers = listOf("ExchangeRate-API Open Access", "Frankfurter API", "Custom Backend API")
                                 items(providers) { provider ->
                                     val isSelected = currentSettings.exchangeRateProviderName == provider
                                     ElevatedFilterChip(
@@ -850,6 +836,11 @@ fun SettingsScreen(
                             fontSize = 12.sp,
                             color = colors.secondaryText
                         )
+                        Text(
+                            text = "Cloud autosync runs every 30 minutes only when network is available. Offline mode continues using local device cache.",
+                            fontSize = 11.sp,
+                            color = colors.mutedText
+                        )
                         
                         Box(
                             modifier = Modifier
@@ -859,26 +850,28 @@ fun SettingsScreen(
                                 .background(colors.border)
                         )
 
-                        var syncUrlTemp by remember { mutableStateOf(currentSettings.backendBaseUrl) }
-                        OutlinedTextField(
-                            value = syncUrlTemp,
-                            onValueChange = {
-                                syncUrlTemp = it
-                                viewModel.setBackendBaseUrl(it)
-                            },
-                            label = { Text("Future Sync Server (Base URL)") },
-                            placeholder = { Text("http://192.168.1.100:3000") },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = colors.primaryText,
-                                unfocusedTextColor = colors.primaryText,
-                                focusedLabelColor = colors.primaryAqua,
-                                unfocusedLabelColor = colors.mutedText,
-                                focusedBorderColor = colors.primaryAqua,
-                                unfocusedBorderColor = colors.border,
-                                cursorColor = colors.primaryAqua
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
+                        Text(
+                            text = "Cloud server endpoint is bundled into this APK build.",
+                            fontSize = 12.sp,
+                            color = colors.secondaryText
+                        )
+                        Surface(
+                            color = colors.glassCard,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, colors.border),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = currentSettings.backendBaseUrl,
+                                fontSize = 12.sp,
+                                color = colors.primaryAqua,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                            )
+                        }
+                        Text(
+                            text = "To change it, update KOTNEST_BACKEND_BASE_URL in .env and rebuild APK.",
+                            fontSize = 11.sp,
+                            color = colors.mutedText
                         )
                     }
                 }

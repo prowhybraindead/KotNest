@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.core.database.AppDatabase
-import com.example.core.util.DateUtils
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 import java.time.LocalDate
@@ -18,67 +17,60 @@ class ReminderWorker(
 
     override suspend fun doWork(): Result {
         try {
-            // Instantiate AppDatabase directly in background worker thread safely
-            val db = AppDatabase.getDatabase(applicationContext, kotlinx.coroutines.GlobalScope)
+            val db = AppDatabase.getDatabase(applicationContext)
             val subscriptions = db.subscriptionDao().getAllSubscriptions().first()
             val notificationHelper = NotificationHelper(applicationContext)
+            val snoozePrefs = applicationContext.getSharedPreferences("kotnest_snooze", Context.MODE_PRIVATE)
 
             val today = LocalDate.now()
             var dueTodayCount = 0
+            var upcomingCount = 0
+            var overdueCount = 0
 
             for (subscription in subscriptions) {
                 if (subscription.isPaused || subscription.status == "Paid") continue
+
+                val snoozeUntil = snoozePrefs.getLong("snooze_${subscription.id}", 0L)
+                if (snoozeUntil > System.currentTimeMillis()) continue
 
                 val dueLocalDate = Instant.ofEpochMilli(subscription.nextDueDate)
                     .atZone(ZoneId.systemDefault())
                     .toLocalDate()
                 
                 val daysDiff = ChronoUnit.DAYS.between(today, dueLocalDate)
+                val amountText = "${String.format("%,.0f", subscription.amount)} ${subscription.currency}"
 
                 when {
                     daysDiff == 7L -> {
-                        notificationHelper.sendReminderNotification(
-                            subscription,
-                            "Renewal Reminder (7 Days)",
-                            "${subscription.name} will renew in 7 days for ${subscription.amount} ${subscription.currency}."
-                        )
+                        upcomingCount++
+                        notificationHelper.sendUpcomingNotification(subscription, 7, amountText)
                     }
                     daysDiff == 3L -> {
-                        notificationHelper.sendReminderNotification(
-                            subscription,
-                            "Renewal Reminder (3 Days)",
-                            "${subscription.name} will renew in 3 days for ${subscription.amount} ${subscription.currency}."
-                        )
+                        upcomingCount++
+                        notificationHelper.sendUpcomingNotification(subscription, 3, amountText)
                     }
                     daysDiff == 1L -> {
-                        notificationHelper.sendReminderNotification(
-                            subscription,
-                            "Renewal Tomorrow",
-                            "${subscription.name} will renew tomorrow for ${subscription.amount} ${subscription.currency}."
-                        )
+                        upcomingCount++
+                        notificationHelper.sendUpcomingNotification(subscription, 1, amountText)
                     }
                     daysDiff == 0L -> {
                         dueTodayCount++
-                        notificationHelper.sendReminderNotification(
-                            subscription,
-                            "Payment Due Today",
-                            "${subscription.name} payment of ${subscription.amount} ${subscription.currency} is due today!"
-                        )
+                        notificationHelper.sendDueTodayNotification(subscription, amountText)
                     }
                     daysDiff < 0L -> {
-                        notificationHelper.sendReminderNotification(
-                            subscription,
-                            "Payment Overdue",
-                            "${subscription.name} is overdue by ${Math.abs(daysDiff)} days!"
-                        )
+                        overdueCount++
+                        notificationHelper.sendOverdueNotification(subscription, kotlin.math.abs(daysDiff).toInt(), amountText)
                     }
                 }
             }
 
-            if (dueTodayCount > 1) {
-                notificationHelper.sendSummaryNotification(
+            if (dueTodayCount > 0 || upcomingCount > 0 || overdueCount > 0) {
+                val body = "Due today: $dueTodayCount | Upcoming alerts: $upcomingCount | Overdue: $overdueCount"
+                notificationHelper.sendDailySummaryNotification(
                     dueTodayCount,
-                    "You have $dueTodayCount payments due today."
+                    upcomingCount,
+                    overdueCount,
+                    body
                 )
             }
 

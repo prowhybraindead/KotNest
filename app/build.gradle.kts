@@ -1,9 +1,30 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.roborazzi)
   alias(libs.plugins.secrets)
+}
+
+val dotEnvExample = rootProject.file(".env.example")
+val dotEnv = rootProject.file(".env")
+val envProps = Properties().apply {
+  if (dotEnvExample.exists()) {
+    dotEnvExample.inputStream().use { load(it) }
+  }
+  if (dotEnv.exists()) {
+    dotEnv.inputStream().use { load(it) }
+  }
+}
+
+fun envOrDefault(name: String, fallback: String): String {
+  val fromProps = envProps.getProperty(name)?.trim()
+  if (!fromProps.isNullOrEmpty()) return fromProps
+  val fromSystem = System.getenv(name)?.trim()
+  if (!fromSystem.isNullOrEmpty()) return fromSystem
+  return fallback
 }
 
 android {
@@ -18,6 +39,12 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    val backendBaseUrl = envOrDefault("KOTNEST_BACKEND_BASE_URL", "http://192.168.1.100:3000")
+    val backendApiToken = envOrDefault("KOTNEST_BACKEND_API_TOKEN", "")
+    val backendDeviceId = envOrDefault("KOTNEST_DEVICE_ID", "default-device")
+    buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
+    buildConfigField("String", "BACKEND_API_TOKEN", "\"$backendApiToken\"")
+    buildConfigField("String", "BACKEND_DEVICE_ID", "\"$backendDeviceId\"")
   }
 
   signingConfigs {
@@ -28,12 +55,6 @@ android {
       keyAlias = "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
-    create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
-    }
   }
 
   buildTypes {
@@ -43,9 +64,7 @@ android {
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
-    debug {
-      signingConfig = signingConfigs.getByName("debugConfig")
-    }
+    debug {}
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11

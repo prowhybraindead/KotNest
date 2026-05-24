@@ -56,22 +56,22 @@ fun RatesScreen(
     )
 
     // Localizations
-    val titleText = if (isVietnamese) "Tỷ giá" else "Exchange Rates"
-    val subtitleText = if (isVietnamese) "Công cụ chuyển đổi và lịch sử" else "Converter and historical trends"
-    val updatedText = if (isVietnamese) "Cập nhật lúc" else "Updated"
-    val providerTextLabel = if (isVietnamese) "Nguồn dữ liệu" else "Data Source"
-    val converterTitle = if (isVietnamese) "Bộ chuyển đổi ngoại tệ" else "Quick Converter"
+    val titleText = if (isVietnamese) "Ty gia" else "Exchange Rates"
+    val subtitleText = if (isVietnamese) "Bo chuyen doi va lich su" else "Converter and historical trends"
+    val updatedText = if (isVietnamese) "Cap nhat luc" else "Updated"
+    val providerTextLabel = if (isVietnamese) "Nguon du lieu" else "Data Source"
+    val converterTitle = if (isVietnamese) "Bo chuyen doi ngoai te" else "Quick Converter"
     val disclaimerText = if (isVietnamese) {
-        "Thông tin tỷ giá mang tính tham khảo và có thể biến động nhẹ so với tỷ giá giao dịch thực tế trên thẻ hoặc ngân hàng quốc tế."
+        "Ty gia mang tinh tham khao va co the khac so voi ty gia giao dich thuc te."
     } else {
         "Exchange rates are for reference and may differ from your bank's real-time settlement rate."
     }
-    val amountPlaceholder = if (isVietnamese) "Nhập số tiền" else "Enter amount"
+    val amountPlaceholder = if (isVietnamese) "Nhap so tien" else "Enter amount"
     val lastUpdatedFormatted = if (state.lastUpdated > 0L) {
         val pattern = if (isVietnamese) "HH:mm dd/MM/yyyy" else "MMM dd, yyyy HH:mm"
         DateUtils.formatEpoch(state.lastUpdated, pattern)
     } else {
-        if (isVietnamese) "Chưa rõ" else "Never"
+        if (isVietnamese) "Chua ro" else "Never"
     }
 
     val positiveColor = if (colors.isLight) Color(0xFF12B76A) else Color(0xFF22C55E)
@@ -192,7 +192,7 @@ fun RatesScreen(
                                 modifier = Modifier.size(20.dp)
                             )
                             Text(
-                                text = if (isVietnamese) "Ngoại tuyến — đang hiển thị tỷ giá được lưu gần nhất" else "Offline — showing last saved rates",
+                                text = if (isVietnamese) "Ngoai tuyen - dang hien thi ty gia luu tru gan nhat" else "Offline - showing last saved rates",
                                 fontSize = 13.sp,
                                 color = if (colors.isLight) colors.primaryText else Color.White,
                                 fontWeight = FontWeight.Bold,
@@ -233,11 +233,11 @@ fun RatesScreen(
                                         .background(colors.primaryAqua.copy(alpha = 0.15f)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("🇻🇳", fontSize = 20.sp)
+                                    Text("VND", fontSize = 13.sp, fontWeight = FontWeight.Black, color = colors.primaryAqua)
                                 }
                                 Column {
                                     Text(
-                                        text = if (isVietnamese) "Tiền tệ mục tiêu" else "Target Currency",
+                                        text = if (isVietnamese) "Tien te muc tieu" else "Target Currency",
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = colors.mutedText,
@@ -802,45 +802,45 @@ fun RatesScreen(
 // Helpers for currency properties mapping
 fun getCurrencyFlag(code: String): String {
     return when (code) {
-        "USD" -> "🇺🇸"
-        "EUR" -> "🇪🇺"
-        "SGD" -> "🇸🇬"
-        "AUD" -> "🇦🇺"
-        "JPY" -> "🇯🇵"
-        "KRW" -> "🇰🇷"
-        "GBP" -> "🇬🇧"
-        "CNY" -> "🇨🇳"
-        "THB" -> "🇹🇭"
-        else -> "🏳️"
+        "USD" -> "US"
+        "EUR" -> "EU"
+        "SGD" -> "SG"
+        "AUD" -> "AU"
+        "JPY" -> "JP"
+        "KRW" -> "KR"
+        "GBP" -> "UK"
+        "CNY" -> "CN"
+        "THB" -> "TH"
+        else -> "--"
     }
 }
 
 fun getCurrencyName(code: String, isVietnamese: Boolean): String {
     return when (code) {
-        "USD" -> if (isVietnamese) "Đô-la Mỹ" else "United States Dollar"
+        "USD" -> if (isVietnamese) "Do la My" else "United States Dollar"
         "EUR" -> "Euro"
-        "SGD" -> if (isVietnamese) "Đô-la Singapore" else "Singapore Dollar"
-        "AUD" -> if (isVietnamese) "Đô-la Úc" else "Australian Dollar"
-        "JPY" -> if (isVietnamese) "Yên Nhật" else "Japanese Yen"
-        "KRW" -> if (isVietnamese) "Won Hàn Quốc" else "South Korean Won"
-        "GBP" -> if (isVietnamese) "Bảng Anh" else "British Pound"
-        "CNY" -> if (isVietnamese) "Nhân dân tệ" else "Chinese Yuan"
-        "THB" -> if (isVietnamese) "Baht Thái" else "Thai Baht"
+        "SGD" -> if (isVietnamese) "Do la Singapore" else "Singapore Dollar"
+        "AUD" -> if (isVietnamese) "Do la Uc" else "Australian Dollar"
+        "JPY" -> if (isVietnamese) "Yen Nhat" else "Japanese Yen"
+        "KRW" -> if (isVietnamese) "Won Han Quoc" else "South Korean Won"
+        "GBP" -> if (isVietnamese) "Bang Anh" else "British Pound"
+        "CNY" -> if (isVietnamese) "Nhan dan te" else "Chinese Yuan"
+        "THB" -> if (isVietnamese) "Baht Thai" else "Thai Baht"
         else -> code
     }
 }
 
 fun getCurrencyCountry(code: String, isVietnamese: Boolean): String {
     return when (code) {
-        "USD" -> if (isVietnamese) "Hoa Kỳ" else "USA"
-        "EUR" -> if (isVietnamese) "Châu Âu" else "Eurozone"
+        "USD" -> if (isVietnamese) "Hoa Ky" else "USA"
+        "EUR" -> if (isVietnamese) "Chau Au" else "Eurozone"
         "SGD" -> "Singapore"
-        "AUD" -> if (isVietnamese) "Úc" else "Australia"
-        "JPY" -> if (isVietnamese) "Nhật Bản" else "Japan"
-        "KRW" -> if (isVietnamese) "Hàn Quốc" else "South Korea"
-        "GBP" -> if (isVietnamese) "Anh Quốc" else "UK"
-        "CNY" -> if (isVietnamese) "Trung Quốc" else "China"
-        "THB" -> if (isVietnamese) "Thái Lan" else "Thailand"
+        "AUD" -> if (isVietnamese) "Uc" else "Australia"
+        "JPY" -> if (isVietnamese) "Nhat Ban" else "Japan"
+        "KRW" -> if (isVietnamese) "Han Quoc" else "South Korea"
+        "GBP" -> if (isVietnamese) "Anh Quoc" else "UK"
+        "CNY" -> if (isVietnamese) "Trung Quoc" else "China"
+        "THB" -> if (isVietnamese) "Thai Lan" else "Thailand"
         else -> code
     }
 }
@@ -1272,3 +1272,7 @@ fun RateDetailBottomSheet(
         }
     }
 }
+
+
+
+

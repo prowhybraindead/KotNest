@@ -12,7 +12,7 @@ import com.example.R
 import com.example.core.database.AppDatabase
 import com.example.domain.usecase.GetDashboardSummaryUseCase
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
@@ -33,9 +33,9 @@ class KotNestWidgetProvider : AppWidgetProvider() {
             appWidgetManager: AppWidgetManager,
             appWidgetIds: IntArray
         ) {
-            GlobalScope.launch(Dispatchers.IO) {
+            CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val db = AppDatabase.getDatabase(context.applicationContext, GlobalScope)
+                    val db = AppDatabase.getDatabase(context.applicationContext)
                     val subDao = db.subscriptionDao()
                     val rateDao = db.exchangeRateDao()
 

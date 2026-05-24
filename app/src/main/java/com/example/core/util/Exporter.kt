@@ -8,7 +8,6 @@ import com.example.core.database.AppDatabase
 import com.example.domain.model.Category
 import com.example.domain.model.PaymentHistory
 import com.example.domain.model.PaymentMethod
-import com.example.domain.model.ReminderRule
 import com.example.domain.model.Subscription
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
@@ -132,6 +131,7 @@ object Exporter {
 
             val categoryIdMap = mutableMapOf<Int, Int>() // originalId -> mappedLocalId
             val paymentMethodIdMap = mutableMapOf<Int, Int>()
+            val subscriptionIdMap = mutableMapOf<Int, Int>() // originalId -> mappedLocalId
 
             var importedCategoriesCount = 0
             var importedPaymentMethodsCount = 0
@@ -197,6 +197,7 @@ object Exporter {
                 val existingSubs = database.subscriptionDao().getAllSubscriptions().first()
                 for (i in 0 until subArray.length()) {
                     val sObj = subArray.getJSONObject(i)
+                    val originalSubId = sObj.optInt("id", 0)
                     val originalPmId = sObj.optInt("paymentMethodId", -1)
                     val originalCatId = sObj.getInt("categoryId")
 
@@ -225,7 +226,11 @@ object Exporter {
                         createdAt = sObj.optLong("createdAt", System.currentTimeMillis()),
                         updatedAt = System.currentTimeMillis()
                     )
-                    database.subscriptionDao().insertSubscription(sub)
+                    val insertedSubId = database.subscriptionDao().insertSubscription(sub).toInt()
+                    val finalSubId = if (sub.id == 0) insertedSubId else sub.id
+                    if (originalSubId > 0) {
+                        subscriptionIdMap[originalSubId] = finalSubId
+                    }
                     importedSubscriptionsCount++
                 }
             }
@@ -233,18 +238,52 @@ object Exporter {
             // 4. Histories
             if (root.has("histories")) {
                 val histArray = root.getJSONArray("histories")
+                val existingHistoryBySub = mutableMapOf<Int, MutableList<PaymentHistory>>()
                 for (i in 0 until histArray.length()) {
                     val hObj = histArray.getJSONObject(i)
                     val originalSubId = hObj.getInt("subscriptionId")
+                    val mappedSubId = subscriptionIdMap[originalSubId] ?: originalSubId
+                    val linkedSub = database.subscriptionDao().getSubscriptionByIdDirect(mappedSubId)
+                    if (linkedSub == null) {
+                        continue
+                    }
+
+                    val paidDate = hObj.getLong("paidDate")
+                    val amount = hObj.getDouble("amount")
+                    val currency = hObj.getString("currency")
+                    val note = hObj.optString("note", "").ifEmpty { null }
+                    val createdAt = hObj.optLong("createdAt", System.currentTimeMillis())
+
+                    val existingList = existingHistoryBySub.getOrPut(mappedSubId) {
+                        database.paymentHistoryDao().getHistoryForSubscriptionDirect(mappedSubId).toMutableList()
+                    }
+                    val duplicated = existingList.any {
+                        it.paidDate == paidDate &&
+                            it.amount == amount &&
+                            it.currency == currency
+                    }
+                    if (duplicated) {
+                        continue
+                    }
                     
                     database.paymentHistoryDao().insertHistory(
                         PaymentHistory(
-                            subscriptionId = originalSubId,
-                            paidDate = hObj.getLong("paidDate"),
-                            amount = hObj.getDouble("amount"),
-                            currency = hObj.getString("currency"),
-                            note = hObj.optString("note", "").ifEmpty { null },
-                            createdAt = hObj.optLong("createdAt", System.currentTimeMillis())
+                            subscriptionId = mappedSubId,
+                            paidDate = paidDate,
+                            amount = amount,
+                            currency = currency,
+                            note = note,
+                            createdAt = createdAt
+                        )
+                    )
+                    existingList.add(
+                        PaymentHistory(
+                            subscriptionId = mappedSubId,
+                            paidDate = paidDate,
+                            amount = amount,
+                            currency = currency,
+                            note = note,
+                            createdAt = createdAt
                         )
                     )
                     importedHistoriesCount++

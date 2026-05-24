@@ -1,34 +1,32 @@
 package com.example.feature.dashboard
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -50,14 +48,15 @@ fun DashboardScreen(
     onNavigateToDetail: (Int) -> Unit,
     onNavigateToRates: () -> Unit,
     onNavigateToReport: () -> Unit,
+    onNavigateToAiChat: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val db = remember { com.example.core.database.AppDatabase.getDatabase(context, kotlinx.coroutines.GlobalScope) }
     val metrics by viewModel.dashboardMetrics.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val allSubscriptions by viewModel.subscriptions.collectAsState()
     val settingsState by viewModel.settings.collectAsState()
+    val aiState by viewModel.aiInsightUiState.collectAsState()
+    val backendStatus by viewModel.backendStatusUiState.collectAsState()
     
     val categoryMap = categories.associateBy { it.id }
     val colors = LocalKotNestColors.current
@@ -90,10 +89,9 @@ fun DashboardScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_kotnest_icon),
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_kotnest_logo),
                             contentDescription = "KotNest Icon",
-                            tint = if (colors.isLight) colors.deepAqua else colors.cyanAccent,
                             modifier = Modifier.size(36.dp)
                         )
                         Column {
@@ -114,6 +112,17 @@ fun DashboardScreen(
                         }
                     }
 
+                    val backendDotColor = when {
+                        backendStatus.isChecking -> colors.warning
+                        backendStatus.isOnline -> colors.success
+                        else -> colors.danger
+                    }
+                    val backendLabel = when {
+                        backendStatus.isChecking -> "Checking..."
+                        backendStatus.isOnline -> "Active Mode"
+                        else -> "Offline Mode"
+                    }
+
                     // Elegant status tracker indicator
                     Box(
                         modifier = Modifier
@@ -130,14 +139,21 @@ fun DashboardScreen(
                             Box(
                                 modifier = Modifier
                                     .size(8.dp)
-                                    .background(colors.success, CircleShape)
+                                    .background(backendDotColor, CircleShape)
                             )
                             Text(
-                                text = "Active Mode",
+                                text = backendLabel,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = colors.primaryText
                             )
+                            if (backendStatus.latencyMs != null && backendStatus.isOnline) {
+                                Text(
+                                    text = "${backendStatus.latencyMs}ms",
+                                    fontSize = 10.sp,
+                                    color = colors.mutedText
+                                )
+                            }
                         }
                     }
                 }
@@ -324,34 +340,41 @@ fun DashboardScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             QuickActionButton(
-                                icon = Icons.Default.Add,
-                                label = if (viewModel.settings.value?.language == "vi") "Thêm hạn" else "Add Dues",
+                                glyph = QuickActionGlyph.AddDue,
+                                label = if (viewModel.settings.value?.language == "vi") "Them han" else "Add Dues",
                                 containerColor = colors.primaryAqua.copy(alpha = 0.12f),
                                 contentColor = colors.primaryAqua,
                                 onClick = onNavigateToAddPayment
                             )
                             QuickActionButton(
-                                icon = Icons.Default.Info,
-                                label = if (viewModel.settings.value?.language == "vi") "Báo cáo" else "Report",
+                                glyph = QuickActionGlyph.Report,
+                                label = if (viewModel.settings.value?.language == "vi") "Bao cao" else "Report",
                                 containerColor = colors.success.copy(alpha = 0.12f),
                                 contentColor = colors.success,
                                 onClick = onNavigateToReport
                             )
                             QuickActionButton(
-                                icon = Icons.Default.List,
-                                label = if (viewModel.settings.value?.language == "vi") "Tỷ giá" else "Rates",
+                                glyph = QuickActionGlyph.Rates,
+                                label = if (viewModel.settings.value?.language == "vi") "Ty gia" else "Rates",
                                 containerColor = colors.deepAqua.copy(alpha = 0.12f),
                                 contentColor = colors.deepAqua,
                                 onClick = onNavigateToRates
                             )
                             QuickActionButton(
-                                icon = Icons.Default.Warning,
-                                label = if (viewModel.settings.value?.language == "vi") "Quá hạn" else "Overdue",
+                                glyph = QuickActionGlyph.Overdue,
+                                label = if (viewModel.settings.value?.language == "vi") "Qua han" else "Overdue",
                                 containerColor = colors.danger.copy(alpha = 0.12f),
                                 contentColor = colors.danger,
                                 onClick = {
                                     viewModel.selectedSubFilter.value = "Overdue"
                                 }
+                            )
+                            QuickActionButton(
+                                glyph = QuickActionGlyph.AiChat,
+                                label = "AI Chat",
+                                containerColor = colors.cyanAccent.copy(alpha = 0.12f),
+                                contentColor = colors.cyanAccent,
+                                onClick = onNavigateToAiChat
                             )
                         }
                     }
@@ -359,6 +382,98 @@ fun DashboardScreen(
             }
 
             // 3. Closest Renewal Card Option
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = aiState.brandName.uppercase(),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.mutedText,
+                        letterSpacing = 1.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = colors.surface),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "AI SPENDING INSIGHT",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.mutedText,
+                                    letterSpacing = 1.1.sp
+                                )
+                                IconButton(
+                                    onClick = {
+                                        viewModel.refreshBackendHealth()
+                                        viewModel.fetchAiInsights()
+                                    },
+                                    colors = IconButtonDefaults.iconButtonColors(
+                                        containerColor = colors.glassWhite,
+                                        contentColor = colors.primaryAqua
+                                    )
+                                ) {
+                                    if (aiState.isLoading) {
+                                        CircularProgressIndicator(
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(16.dp),
+                                            color = colors.primaryAqua
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.Refresh, contentDescription = "Refresh AI insight")
+                                    }
+                                }
+                            }
+
+                            Text(
+                                text = aiState.insight,
+                                fontSize = 13.sp,
+                                color = colors.primaryText,
+                                lineHeight = 20.sp
+                            )
+
+                            aiState.actions.take(3).forEach { action ->
+                                Text(
+                                    text = "- $action",
+                                    fontSize = 12.sp,
+                                    color = colors.secondaryText
+                                )
+                            }
+
+                            if (aiState.filtered) {
+                                Text(
+                                    text = "Filtered by backend safety policy",
+                                    fontSize = 11.sp,
+                                    color = colors.warning,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            if (!aiState.errorMessage.isNullOrBlank()) {
+                                Text(
+                                    text = aiState.errorMessage!!,
+                                    fontSize = 11.sp,
+                                    color = colors.mutedText
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. Closest Renewal Card Option
             if (metrics.closestUpcoming != null) {
                 item {
                     val sub = metrics.closestUpcoming!!
@@ -381,7 +496,7 @@ fun DashboardScreen(
                 }
             }
 
-            // 4. Due in next 7 days list section
+            // 5. Due in next 7 days list section
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -420,7 +535,7 @@ fun DashboardScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                "No subscription payments in 7 days! 🍃",
+                                "No subscription payments in 7 days.",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = colors.mutedText
@@ -449,7 +564,7 @@ fun DashboardScreen(
 
 @Composable
 fun QuickActionButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    glyph: QuickActionGlyph,
     label: String,
     containerColor: Color,
     contentColor: Color,
@@ -469,9 +584,8 @@ fun QuickActionButton(
                 .border(1.dp, colors.border, RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
+            QuickActionGlyphIcon(
+                glyph = glyph,
                 tint = contentColor,
                 modifier = Modifier.size(24.dp)
             )
@@ -483,6 +597,83 @@ fun QuickActionButton(
             fontWeight = FontWeight.Bold,
             color = colors.primaryText
         )
+    }
+}
+
+enum class QuickActionGlyph {
+    AddDue,
+    Report,
+    Rates,
+    Overdue,
+    AiChat,
+}
+
+@Composable
+fun QuickActionGlyphIcon(
+    glyph: QuickActionGlyph,
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val stroke = Stroke(width = size.minDimension * 0.12f)
+
+        when (glyph) {
+            QuickActionGlyph.AddDue -> {
+                val cx = w / 2f
+                val cy = h / 2f
+                drawCircle(color = tint, radius = size.minDimension * 0.46f, style = Stroke(width = size.minDimension * 0.1f))
+                drawLine(tint, androidx.compose.ui.geometry.Offset(cx, h * 0.24f), androidx.compose.ui.geometry.Offset(cx, h * 0.76f), strokeWidth = size.minDimension * 0.12f)
+                drawLine(tint, androidx.compose.ui.geometry.Offset(w * 0.24f, cy), androidx.compose.ui.geometry.Offset(w * 0.76f, cy), strokeWidth = size.minDimension * 0.12f)
+            }
+            QuickActionGlyph.Report -> {
+                drawLine(tint, androidx.compose.ui.geometry.Offset(w * 0.18f, h * 0.8f), androidx.compose.ui.geometry.Offset(w * 0.82f, h * 0.8f), strokeWidth = size.minDimension * 0.1f)
+                drawLine(tint, androidx.compose.ui.geometry.Offset(w * 0.26f, h * 0.78f), androidx.compose.ui.geometry.Offset(w * 0.26f, h * 0.5f), strokeWidth = size.minDimension * 0.12f)
+                drawLine(tint, androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.78f), androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.34f), strokeWidth = size.minDimension * 0.12f)
+                drawLine(tint, androidx.compose.ui.geometry.Offset(w * 0.74f, h * 0.78f), androidx.compose.ui.geometry.Offset(w * 0.74f, h * 0.2f), strokeWidth = size.minDimension * 0.12f)
+            }
+            QuickActionGlyph.Rates -> {
+                val points = listOf(
+                    androidx.compose.ui.geometry.Offset(w * 0.14f, h * 0.7f),
+                    androidx.compose.ui.geometry.Offset(w * 0.36f, h * 0.54f),
+                    androidx.compose.ui.geometry.Offset(w * 0.56f, h * 0.62f),
+                    androidx.compose.ui.geometry.Offset(w * 0.82f, h * 0.28f),
+                )
+                for (i in 0 until points.lastIndex) {
+                    drawLine(tint, points[i], points[i + 1], strokeWidth = size.minDimension * 0.1f)
+                }
+                points.forEach { drawCircle(tint, radius = size.minDimension * 0.08f, center = it) }
+            }
+            QuickActionGlyph.Overdue -> {
+                drawCircle(color = tint, radius = size.minDimension * 0.44f, style = Stroke(width = size.minDimension * 0.1f))
+                drawLine(
+                    color = tint,
+                    start = androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.25f),
+                    end = androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.52f),
+                    strokeWidth = size.minDimension * 0.1f
+                )
+                drawLine(
+                    color = tint,
+                    start = androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.52f),
+                    end = androidx.compose.ui.geometry.Offset(w * 0.7f, h * 0.66f),
+                    strokeWidth = size.minDimension * 0.1f
+                )
+            }
+            QuickActionGlyph.AiChat -> {
+                drawRoundRect(
+                    color = tint,
+                    topLeft = androidx.compose.ui.geometry.Offset(w * 0.14f, h * 0.2f),
+                    size = androidx.compose.ui.geometry.Size(w * 0.72f, h * 0.56f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.14f, w * 0.14f),
+                    style = stroke
+                )
+                drawLine(tint, androidx.compose.ui.geometry.Offset(w * 0.3f, h * 0.78f), androidx.compose.ui.geometry.Offset(w * 0.42f, h * 0.66f), strokeWidth = size.minDimension * 0.09f)
+                drawLine(tint, androidx.compose.ui.geometry.Offset(w * 0.44f, h * 0.42f), androidx.compose.ui.geometry.Offset(w * 0.44f, h * 0.44f), strokeWidth = size.minDimension * 0.09f)
+                drawCircle(tint, radius = size.minDimension * 0.04f, center = androidx.compose.ui.geometry.Offset(w * 0.44f, h * 0.32f))
+                drawCircle(tint, radius = size.minDimension * 0.04f, center = androidx.compose.ui.geometry.Offset(w * 0.62f, h * 0.32f))
+            }
+        }
     }
 }
 
@@ -538,7 +729,7 @@ fun SubscriptionRow(
                         .background(categoryColor.copy(alpha = 0.12f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    val emojiText = category?.icon ?: "💳"
+                    val emojiText = category?.icon ?: "CARD"
                     Text(
                         text = emojiText,
                         fontSize = 20.sp
@@ -634,3 +825,5 @@ fun parseColor(colorStr: String): Color {
         Color.Gray
     }
 }
+
+

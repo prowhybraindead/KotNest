@@ -428,7 +428,7 @@ class AddPaymentViewModelFactory(
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(AddPaymentViewModel::class.java)) {
-            val db = AppDatabase.getDatabase(context, kotlinx.coroutines.GlobalScope)
+            val db = AppDatabase.getDatabase(context)
             val repository = DueMateRepositoryImpl(db)
             val settingsManager = SettingsManager(context)
             @Suppress("UNCHECKED_CAST")

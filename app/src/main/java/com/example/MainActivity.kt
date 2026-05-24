@@ -38,6 +38,8 @@ import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import androidx.work.*
 import com.example.core.notification.ReminderWorker
+import com.example.core.sync.CloudSyncWorker
+import com.example.feature.ai.AIChatScreen
 import com.example.feature.calendar.CalendarScreen
 import com.example.feature.dashboard.DashboardScreen
 import com.example.feature.payments.AddEditPaymentScreen
@@ -78,6 +80,8 @@ class MainActivity : ComponentActivity() {
 
         // Schedule daily background WorkManager due notifications
         scheduleDailyReminder()
+        scheduleCloudAutoSync()
+        CloudSyncWorker.enqueueNow(applicationContext)
 
         setContent {
             val settingsState by viewModel.settings.collectAsState()
@@ -318,7 +322,8 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToAddPayment = { navController.navigate("add_edit/0") },
                                     onNavigateToDetail = { id -> navController.navigate("detail/$id") },
                                     onNavigateToRates = { navController.navigate("rates") },
-                                    onNavigateToReport = { navController.navigate("report") }
+                                    onNavigateToReport = { navController.navigate("report") },
+                                    onNavigateToAiChat = { navController.navigate("ai_chat") }
                                 )
                             }
 
@@ -342,6 +347,13 @@ class MainActivity : ComponentActivity() {
 
                             composable("rates") {
                                 RatesScreen(
+                                    viewModel = viewModel,
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable("ai_chat") {
+                                AIChatScreen(
                                     viewModel = viewModel,
                                     onNavigateBack = { navController.popBackStack() }
                                 )
@@ -429,6 +441,10 @@ class MainActivity : ComponentActivity() {
             ExistingPeriodicWorkPolicy.KEEP,
             repeatingRequest
         )
+    }
+
+    private fun scheduleCloudAutoSync() {
+        CloudSyncWorker.schedulePeriodic(applicationContext)
     }
 }
 

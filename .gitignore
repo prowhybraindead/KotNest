@@ -16,3 +16,25 @@
 local.properties
 .env
 debug.keystore
+
+# Local tooling / temp output
+.tools/
+.build-outputs/
+
+# Python backend local artifacts
+backend/.venv/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/data/
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+
+# Backend local env / logs
+backend/.env
+backend/cloudflare/.env
+backend/cloudflare/*.log
+backend/cloudflare/*.pid

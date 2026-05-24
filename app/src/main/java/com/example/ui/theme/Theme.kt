@@ -124,8 +124,8 @@ fun MyApplicationTheme(
             dueTodayBackground = DarkDueTodayBackground,
             overdueBackground = DarkOverdueBackground,
             upcomingBackground = DarkUpcomingBackground,
-            glassWhite = Color(0x1AFFFFFF),
-            glassBorder = Color(0x2EFFFFFF)
+            glassWhite = Color(0xFF070707),
+            glassBorder = DarkCardBorder
         )
     } else {
         KotNestColors(

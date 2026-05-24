@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.content.Context
+import com.example.BuildConfig
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -13,6 +14,7 @@ import com.example.data.repository.DueMateRepositoryImpl
 import com.example.domain.model.*
 import com.example.domain.repository.DueMateRepository
 import com.example.core.network.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.InputStream
@@ -47,6 +49,13 @@ class DueMateViewModel(
 
     private val _ratesUiState = MutableStateFlow(RatesUiState())
     val ratesUiState: StateFlow<RatesUiState> = _ratesUiState.asStateFlow()
+    private val _aiInsightUiState = MutableStateFlow(AiInsightUiState())
+    val aiInsightUiState: StateFlow<AiInsightUiState> = _aiInsightUiState.asStateFlow()
+    private val _aiChatUiState = MutableStateFlow(AiChatUiState())
+    val aiChatUiState: StateFlow<AiChatUiState> = _aiChatUiState.asStateFlow()
+    private val _backendStatusUiState = MutableStateFlow(BackendStatusUiState())
+    val backendStatusUiState: StateFlow<BackendStatusUiState> = _backendStatusUiState.asStateFlow()
+    private var aiRequestedOnce = false
 
     // 1b. Reactive Calendar Flows
     val selectedCalendarMonth = MutableStateFlow(YearMonth.now())
@@ -141,6 +150,330 @@ class DueMateViewModel(
                         fetchRates(force = false)
                     }
                 }
+                if (!aiRequestedOnce) {
+                    aiRequestedOnce = true
+                    refreshBackendHealth()
+                    refreshAiModelConfig()
+                    fetchAiInsights()
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            while (true) {
+                refreshBackendHealth()
+                delay(45_000)
+            }
+        }
+    }
+
+    fun refreshBackendHealth() {
+        viewModelScope.launch {
+            val startedAt = System.currentTimeMillis()
+            _backendStatusUiState.update { it.copy(isChecking = true, errorMessage = null) }
+            try {
+                val api = RetrofitClient.getClient(
+                    baseUrl = BuildConfig.BACKEND_BASE_URL,
+                    apiToken = BuildConfig.BACKEND_API_TOKEN.ifBlank { null },
+                    deviceId = BuildConfig.BACKEND_DEVICE_ID.ifBlank { null }
+                )
+                val response = api.healthz()
+                val elapsed = System.currentTimeMillis() - startedAt
+                val body = response.body()
+                if (response.isSuccessful && body != null && body.status.equals("ok", ignoreCase = true)) {
+                    _backendStatusUiState.value = BackendStatusUiState(
+                        isChecking = false,
+                        isOnline = true,
+                        latencyMs = elapsed,
+                        serviceName = body.service.ifBlank { "kotnest-backend" },
+                        lastCheckedAt = System.currentTimeMillis(),
+                        errorMessage = null
+                    )
+                } else {
+                    _backendStatusUiState.value = BackendStatusUiState(
+                        isChecking = false,
+                        isOnline = false,
+                        latencyMs = null,
+                        serviceName = "kotnest-backend",
+                        lastCheckedAt = System.currentTimeMillis(),
+                        errorMessage = "Health check failed (HTTP ${response.code()})."
+                    )
+                }
+            } catch (e: Exception) {
+                _backendStatusUiState.value = BackendStatusUiState(
+                    isChecking = false,
+                    isOnline = false,
+                    latencyMs = null,
+                    serviceName = "kotnest-backend",
+                    lastCheckedAt = System.currentTimeMillis(),
+                    errorMessage = e.message ?: "Network error"
+                )
+            }
+        }
+    }
+
+    fun fetchAiInsights(
+        focus: String? = null,
+        provider: String? = _aiChatUiState.value.selectedProvider,
+        model: String? = _aiChatUiState.value.selectedModel
+    ) {
+        viewModelScope.launch {
+            val current = _aiInsightUiState.value
+            _aiInsightUiState.value = current.copy(isLoading = true, errorMessage = null)
+            try {
+                val api = RetrofitClient.getClient(
+                    baseUrl = BuildConfig.BACKEND_BASE_URL,
+                    apiToken = BuildConfig.BACKEND_API_TOKEN.ifBlank { null },
+                    deviceId = BuildConfig.BACKEND_DEVICE_ID.ifBlank { null }
+                )
+                val response = api.getAiInsights(
+                    deviceId = BuildConfig.BACKEND_DEVICE_ID,
+                    focus = focus,
+                    provider = provider,
+                    model = model
+                )
+                val body = response.body()
+                if (response.isSuccessful && body != null) {
+                    _backendStatusUiState.update {
+                        it.copy(
+                            isChecking = false,
+                            isOnline = true,
+                            serviceName = "kotnest-backend",
+                            lastCheckedAt = System.currentTimeMillis(),
+                            errorMessage = null
+                        )
+                    }
+                    _aiInsightUiState.value = AiInsightUiState(
+                        isLoading = false,
+                        brandName = body.brandName,
+                        provider = body.provider,
+                        model = body.model,
+                        filtered = body.filtered,
+                        insight = body.insight,
+                        actions = body.actions,
+                        generatedAt = body.generatedAt,
+                        errorMessage = null
+                    )
+                } else {
+                    _backendStatusUiState.update {
+                        it.copy(
+                            isChecking = false,
+                            isOnline = false,
+                            lastCheckedAt = System.currentTimeMillis(),
+                            errorMessage = "AI insights HTTP ${response.code()}"
+                        )
+                    }
+                    _aiInsightUiState.value = current.copy(
+                        isLoading = false,
+                        errorMessage = "Could not refresh AI insight from backend (HTTP ${response.code()})."
+                    )
+                }
+            } catch (e: Exception) {
+                _backendStatusUiState.update {
+                    it.copy(
+                        isChecking = false,
+                        isOnline = false,
+                        lastCheckedAt = System.currentTimeMillis(),
+                        errorMessage = e.message ?: "Network error"
+                    )
+                }
+                _aiInsightUiState.value = current.copy(
+                    isLoading = false,
+                    errorMessage = "Offline mode: showing last cached AI insight."
+                )
+            }
+        }
+    }
+
+    fun refreshAiModelConfig() {
+        viewModelScope.launch {
+            val current = _aiChatUiState.value
+            _aiChatUiState.value = current.copy(isLoadingConfig = true, errorMessage = null)
+            try {
+                val api = RetrofitClient.getClient(
+                    baseUrl = BuildConfig.BACKEND_BASE_URL,
+                    apiToken = BuildConfig.BACKEND_API_TOKEN.ifBlank { null },
+                    deviceId = BuildConfig.BACKEND_DEVICE_ID.ifBlank { null }
+                )
+                val response = api.getAiModels()
+                val body = response.body()
+                if (response.isSuccessful && body != null) {
+                    _backendStatusUiState.update {
+                        it.copy(
+                            isChecking = false,
+                            isOnline = true,
+                            serviceName = "kotnest-backend",
+                            lastCheckedAt = System.currentTimeMillis(),
+                            errorMessage = null
+                        )
+                    }
+                    val providers = body.providers
+                    val selectedProvider = providers.keys.firstOrNull { it == body.defaultProvider }
+                        ?: providers.keys.firstOrNull()
+                        ?: "nesty"
+                    val selectedModel = providers[selectedProvider]?.firstOrNull { it == body.defaultModel }
+                        ?: providers[selectedProvider]?.firstOrNull()
+                        ?: body.defaultModel
+                    _aiChatUiState.value = current.copy(
+                        isLoadingConfig = false,
+                        brandName = body.brandName,
+                        rulesVersion = body.rulesVersion,
+                        providerModels = providers,
+                        selectedProvider = selectedProvider,
+                        selectedModel = selectedModel,
+                        errorMessage = null
+                    )
+                } else {
+                    _backendStatusUiState.update {
+                        it.copy(
+                            isChecking = false,
+                            isOnline = false,
+                            lastCheckedAt = System.currentTimeMillis(),
+                            errorMessage = "AI models HTTP ${response.code()}"
+                        )
+                    }
+                    _aiChatUiState.value = current.copy(
+                        isLoadingConfig = false,
+                        errorMessage = "Could not load AI model list (HTTP ${response.code()})."
+                    )
+                }
+            } catch (e: Exception) {
+                _backendStatusUiState.update {
+                    it.copy(
+                        isChecking = false,
+                        isOnline = false,
+                        lastCheckedAt = System.currentTimeMillis(),
+                        errorMessage = e.message ?: "Network error"
+                    )
+                }
+                _aiChatUiState.value = current.copy(
+                    isLoadingConfig = false,
+                    errorMessage = "Offline mode: AI config unavailable."
+                )
+            }
+        }
+    }
+
+    fun selectAiProvider(provider: String) {
+        _aiChatUiState.update { state ->
+            val models = state.providerModels[provider].orEmpty()
+            state.copy(
+                selectedProvider = provider,
+                selectedModel = models.firstOrNull() ?: state.selectedModel
+            )
+        }
+    }
+
+    fun selectAiModel(model: String) {
+        _aiChatUiState.update { it.copy(selectedModel = model) }
+    }
+
+    fun setAiWebSearchEnabled(enabled: Boolean) {
+        _aiChatUiState.update { it.copy(enableWebSearch = enabled) }
+    }
+
+    fun sendAiChatMessage(message: String) {
+        val trimmed = message.trim()
+        if (trimmed.isBlank()) return
+
+        viewModelScope.launch {
+            val current = _aiChatUiState.value
+            val userTurn = AiChatTurn(role = "user", text = trimmed)
+            val historyTurns = (current.messages + userTurn).takeLast(20)
+            _aiChatUiState.value = current.copy(
+                isSending = true,
+                messages = historyTurns,
+                errorMessage = null
+            )
+
+            try {
+                val api = RetrofitClient.getClient(
+                    baseUrl = BuildConfig.BACKEND_BASE_URL,
+                    apiToken = BuildConfig.BACKEND_API_TOKEN.ifBlank { null },
+                    deviceId = BuildConfig.BACKEND_DEVICE_ID.ifBlank { null }
+                )
+                val request = AiChatRequest(
+                    provider = current.selectedProvider,
+                    model = current.selectedModel,
+                    message = trimmed,
+                    history = current.messages.takeLast(10).map {
+                        AiChatMessageDto(role = it.role, content = it.text)
+                    },
+                    focus = null,
+                    enableWebSearch = current.enableWebSearch
+                )
+                val response = api.chatWithAi(
+                    request = request,
+                    deviceId = BuildConfig.BACKEND_DEVICE_ID
+                )
+                val body = response.body()
+                if (response.isSuccessful && body != null) {
+                    _backendStatusUiState.update {
+                        it.copy(
+                            isChecking = false,
+                            isOnline = true,
+                            serviceName = "kotnest-backend",
+                            lastCheckedAt = System.currentTimeMillis(),
+                            errorMessage = null
+                        )
+                    }
+                    val previousState = _aiChatUiState.value
+                    val providerExists = previousState.providerModels.containsKey(body.provider)
+                    val nextProvider = if (providerExists) body.provider else previousState.selectedProvider
+                    val providerModels = previousState.providerModels[nextProvider].orEmpty()
+                    val nextModel = if (providerModels.contains(body.model)) body.model else previousState.selectedModel
+                    val assistantTurn = AiChatTurn(
+                        role = "assistant",
+                        text = body.answer,
+                        citations = body.citations.map {
+                            AiCitationUi(
+                                title = it.title,
+                                url = it.url,
+                                source = it.source
+                            )
+                        },
+                        filtered = body.filtered
+                    )
+                    _aiChatUiState.value = _aiChatUiState.value.copy(
+                        isSending = false,
+                        brandName = body.brandName,
+                        selectedProvider = nextProvider,
+                        selectedModel = nextModel,
+                        rulesVersion = body.rulesVersion,
+                        messages = (_aiChatUiState.value.messages + assistantTurn).takeLast(24),
+                        errorMessage = null
+                    )
+                    fetchAiInsights(
+                        provider = body.provider,
+                        model = body.model
+                    )
+                } else {
+                    _backendStatusUiState.update {
+                        it.copy(
+                            isChecking = false,
+                            isOnline = false,
+                            lastCheckedAt = System.currentTimeMillis(),
+                            errorMessage = "AI chat HTTP ${response.code()}"
+                        )
+                    }
+                    _aiChatUiState.value = _aiChatUiState.value.copy(
+                        isSending = false,
+                        errorMessage = "AI chat request failed (HTTP ${response.code()})."
+                    )
+                }
+            } catch (e: Exception) {
+                _backendStatusUiState.update {
+                    it.copy(
+                        isChecking = false,
+                        isOnline = false,
+                        lastCheckedAt = System.currentTimeMillis(),
+                        errorMessage = e.message ?: "Network error"
+                    )
+                }
+                _aiChatUiState.value = _aiChatUiState.value.copy(
+                    isSending = false,
+                    errorMessage = "No network or backend unavailable. ${e.message ?: ""}".trim()
+                )
             }
         }
     }
@@ -177,7 +510,8 @@ class DueMateViewModel(
                 "ExchangeRate-API Open Access" -> com.example.core.network.ExchangeRateApiOpenAccessProvider()
                 "Frankfurter API" -> com.example.core.network.FrankfurterExchangeRateProvider()
                 "ExchangeRate-API (Placeholder)" -> com.example.core.network.ExchangeRateApiOpenAccessProvider()
-                "Custom Backend API (Placeholder)" -> com.example.core.network.CustomBackendExchangeRateProvider()
+                "Custom Backend API (Placeholder)" -> com.example.core.network.CustomBackendExchangeRateProvider(currentSettings.backendBaseUrl)
+                "Custom Backend API" -> com.example.core.network.CustomBackendExchangeRateProvider(currentSettings.backendBaseUrl)
                 else -> com.example.core.network.ExchangeRateApiOpenAccessProvider()
             }
             
@@ -503,12 +837,6 @@ class DueMateViewModel(
         }
     }
 
-    fun setBackendBaseUrl(url: String) {
-        viewModelScope.launch {
-            settingsManager.updateBackendBaseUrl(url)
-        }
-    }
-
     fun setShowEstimatedVnd(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.updateShowEstimatedVnd(enabled)
@@ -688,7 +1016,7 @@ class DueMateViewModelFactory(
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(DueMateViewModel::class.java)) {
-            val db = AppDatabase.getDatabase(context, kotlinx.coroutines.GlobalScope)
+            val db = AppDatabase.getDatabase(context)
             val repository = DueMateRepositoryImpl(db)
             val settingsManager = SettingsManager(context)
             @Suppress("UNCHECKED_CAST")
@@ -711,6 +1039,58 @@ data class RatesUiState(
     val converterAmount: String = "1",
     val converterSourceCurrency: String = "USD",
     val convertedValue: Double = 0.0
+)
+
+data class AiInsightUiState(
+    val isLoading: Boolean = false,
+    val brandName: String = "Nesty",
+    val provider: String = "Local Fallback",
+    val model: String = "local_rules",
+    val filtered: Boolean = false,
+    val insight: String = "AI insight is preparing your personalized spending guidance.",
+    val actions: List<String> = emptyList(),
+    val generatedAt: Long = 0L,
+    val errorMessage: String? = null
+)
+
+data class AiCitationUi(
+    val title: String,
+    val url: String,
+    val source: String
+)
+
+data class AiChatTurn(
+    val role: String,
+    val text: String,
+    val citations: List<AiCitationUi> = emptyList(),
+    val filtered: Boolean = false
+)
+
+data class AiChatUiState(
+    val brandName: String = "Nesty",
+    val rulesVersion: String = "",
+    val providerModels: Map<String, List<String>> = mapOf(
+        "nesty" to listOf(
+            "nesty-atlas-combined-1.0",
+            "nesty-atlas-pro-1.0"
+        )
+    ),
+    val selectedProvider: String = "nesty",
+    val selectedModel: String = "nesty-atlas-combined-1.0",
+    val enableWebSearch: Boolean = true,
+    val isLoadingConfig: Boolean = false,
+    val isSending: Boolean = false,
+    val messages: List<AiChatTurn> = emptyList(),
+    val errorMessage: String? = null
+)
+
+data class BackendStatusUiState(
+    val isChecking: Boolean = false,
+    val isOnline: Boolean = false,
+    val latencyMs: Long? = null,
+    val serviceName: String = "kotnest-backend",
+    val lastCheckedAt: Long = 0L,
+    val errorMessage: String? = null
 )
 
 data class CalendarUiState(

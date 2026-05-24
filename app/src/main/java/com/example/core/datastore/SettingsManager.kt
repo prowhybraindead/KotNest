@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.BuildConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -19,7 +20,6 @@ class SettingsManager(private val context: Context) {
         private val LANGUAGE_KEY = stringPreferencesKey("language")
         private val NOTIFICATIONS_ENABLED_KEY = booleanPreferencesKey("notifications_enabled")
         private val APP_LOCK_ENABLED_KEY = booleanPreferencesKey("app_lock_enabled")
-        private val BACKEND_BASE_URL_KEY = stringPreferencesKey("backend_base_url")
         private val PREFERRED_TARGET_CURRENCY_KEY = stringPreferencesKey("preferred_target_currency")
         private val REFRESH_INTERVAL_HOURS_KEY = intPreferencesKey("refresh_interval_hours")
         private val AUTO_REFRESH_RATES_KEY = booleanPreferencesKey("auto_refresh_rates")
@@ -43,7 +43,7 @@ class SettingsManager(private val context: Context) {
             language = preferences[LANGUAGE_KEY] ?: "en",
             notificationEnabled = preferences[NOTIFICATIONS_ENABLED_KEY] ?: true,
             appLockEnabled = preferences[APP_LOCK_ENABLED_KEY] ?: false,
-            backendBaseUrl = preferences[BACKEND_BASE_URL_KEY] ?: "http://192.168.1.100:3000",
+            backendBaseUrl = BuildConfig.BACKEND_BASE_URL,
             preferredTargetCurrency = preferences[PREFERRED_TARGET_CURRENCY_KEY] ?: "VND",
             refreshIntervalHours = preferences[REFRESH_INTERVAL_HOURS_KEY] ?: 6,
             autoRefreshRates = preferences[AUTO_REFRESH_RATES_KEY] ?: true,
@@ -98,12 +98,6 @@ class SettingsManager(private val context: Context) {
     suspend fun updateAppLockEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[APP_LOCK_ENABLED_KEY] = enabled
-        }
-    }
-
-    suspend fun updateBackendBaseUrl(url: String) {
-        context.dataStore.edit { preferences ->
-            preferences[BACKEND_BASE_URL_KEY] = url
         }
     }
 
