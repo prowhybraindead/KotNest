@@ -1,0 +1,6 @@
+{
+  "name": "KotNest",
+  "description": "KotNest helps you track and manage your recurring subscriptions, payments, and renewals with offline-first local security, calendars, and reminders.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

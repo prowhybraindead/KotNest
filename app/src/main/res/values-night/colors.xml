@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark Mode swaps -->
+    <color name="widget_background_themed">@color/widget_bg_dark</color>
+    <color name="widget_border_themed">@color/widget_border_dark</color>
+    <color name="widget_text_primary_themed">@color/widget_text_primary_dark</color>
+</resources>
